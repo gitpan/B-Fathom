@@ -78,7 +78,7 @@ use strict;
 use B;
 
 use vars qw($VERSION);
-$VERSION = 0.04;
+$VERSION = 0.05;
 
 
 # TODO:
@@ -240,6 +240,8 @@ sub B::OBJECT::tally_op
     my ($self)  = @_;
     my $ppaddr  = $self->can('ppaddr') ? $self->ppaddr : undef;
     my $output  = "";
+
+    $ppaddr =~ s/^Perl_//;  # Normalize EMBED and non-EMBED ppaddr's
 
     if ($self->can('line')) {
        $output  = perline();

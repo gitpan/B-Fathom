@@ -19,3 +19,6 @@ Revision history for Perl extension B::Fathom.
         - Code cleanup (if this module isn't readable, then we are all doomed)
         - A subroutine _per se_ now counts as a statement
 
+0.05  Wed Aug 18 10:17:17 EDT 1999
+        - Add support for both EMBED and non-EMBED versions of perl
+
