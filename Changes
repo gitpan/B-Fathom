@@ -22,3 +22,6 @@ Revision history for Perl extension B::Fathom.
 0.05  Wed Aug 18 10:17:17 EDT 1999
         - Add support for both EMBED and non-EMBED versions of perl
 
+0.06  Thu Aug 19 12:14:12 EDT 1999
+        - fathom() can now be called repeatedly
+

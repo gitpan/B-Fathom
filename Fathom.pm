@@ -1,5 +1,12 @@
 package B::Fathom;
 
+use strict;
+
+use B;
+
+use vars qw($VERSION);
+$VERSION = 0.06;
+
 =head1 NAME
 
 B::Fathom - a module to evaluate the readability of Perl code
@@ -73,14 +80,6 @@ Kurt Starsinic E<lt>F<Kurt.Starsinic@isinet.com>E<gt>
 =cut
 
 
-use strict;
-
-use B;
-
-use vars qw($VERSION);
-$VERSION = 0.05;
-
-
 # TODO:
 #   Incorporate Halstead's effort equation and McCabe's cyclomatic metric
 #   Process format statements, prototypes, and package statements
@@ -124,9 +123,10 @@ sub do_compile
     my (@subrefs)   = @_;
     my $preamble    = "";
 
-    if (@subrefs) {
-        @Subs_queue = ();
+    %Taken = %Name = @Skip_sub = @Subs_queue = ();
+    $Tok = $Expr = $State = $Sub = 0;
 
+    if (@subrefs) {
         foreach (@subrefs) {
             return "$_ is not a subroutine ref" if ref ne 'CODE';
             push @Subs_queue, B::svref_2object($_)->ROOT;
@@ -369,6 +369,7 @@ sub _parse_args
 ###
 ### Please note that, for now, one can only successfully have one
 ### B::Fathom object at a time, as compilation arguments are globals.
+###
 
 sub new
 {
