@@ -1,6 +1,5 @@
 package B::Fathom;
 
-
 =head1 NAME
 
 B::Fathom - a module to evaluate the readability of Perl code
@@ -16,13 +15,42 @@ or
 where E<lt>scriptE<gt> is the name of the Perl program that you
 want to evaluate.
 
-C<-v> activates verbose mode, which currently reports the subs
-that have been skipped over because they seem to be imported.
+C<-v> activates verbose mode, which currently reports which subs have been
+skipped over because they seem to be imported.  One can also indicate C<-vN>,
+where C<N> is some number greater than zero, to provide I<even more> verbose
+diagnostics.  The specifics of these modes may change in future releases.  See
+comments in the code for further information.
+
+There is also an OO interface, which can be used as follows:
+
+    my $fathom  = B::Fathom->new('-v');
+    my $score   = $fathom->fathom(\&foo);
+
+See METHODS below for a more complete explanation of the OO interface.
 
 =head1 DESCRIPTION
 
 C<B::Fathom> is a backend to the Perl compiler; it analyzes the syntax
 of your Perl code, and estimates the readability of your program.
+
+=head1 METHODS
+
+There is a simple object-oriented interface to B::Fathom.  It consists of two
+methods:
+
+=over 4
+
+=item new(@args)
+
+This method constructs a new compiler object.  The optional @args indicate
+compiler options; see SYNOPSIS for a list.
+
+=item fathom(@subrefs)
+
+This method grades the subroutines referred to by @subrefs, and returns
+their score as a string.
+
+=back
 
 =head1 CAVEATS
 
@@ -34,11 +62,11 @@ C<Fathom> doesn't work very well on modules yet.
 
 =head1 AUTHOR
 
-Kurt Starsinic E<lt>F<kstar@isinet.com>E<gt>
+Kurt Starsinic E<lt>F<Kurt.Starsinic@isinet.com>E<gt>
 
 =head1 COPYRIGHT
 
-    Copyright (c) 1998 Kurt Starsinic.
+    Copyright (c) 1998, 1999 Kurt Starsinic.
     This module is free software; you may redistribute it
     and/or modify it under the same terms as Perl itself.
 
@@ -50,18 +78,19 @@ use strict;
 use B;
 
 use vars qw($VERSION);
-$VERSION = 0.03;
+$VERSION = 0.04;
 
 
 # TODO:
-#   Process format statements and prototypes
+#   Incorporate Halstead's effort equation and McCabe's cyclomatic metric
+#   Process format statements, prototypes, and package statements
 #   Do a more accurate job when processing modules, rather than scripts
 #   Be smarter about parentheses
 #   Find a `cooler' way to dereference CV's than using symbolic refs
 
 
 my (%Taken, %Name, @Skip_sub, @Subs_queue);
-my ($Tok, $Expr, $State, $Sub);
+my ($Tok, $Expr, $State, $Sub) = (0, 0, 0, 0);
 my $Verbose = 0;
 my (%Boring) = (
     pp_null         => 1,
@@ -79,53 +108,78 @@ sub compile
 {
     my (@args)  = @_;
 
-    foreach (@args) {
-        if (/-v(.*)/) { # -v or -vn
-            $Verbose += $1 || 1;
-        }
-    }
+    _parse_args(@args);
 
-    return \&do_compile;
+    return sub { print do_compile() }
 }
 
 
+# This subroutine is called by either the compiler backend mechanism
+# (via -MO=Fathom) or via the OO interface (via fathom()).  If no
+# parameters were passed in, this is a call from the compiler backend,
+# and we fathom all of the code in main::.  If parameters _are_ passed
+# in, then they're a list of references to subroutines to fathom.
 sub do_compile
 {
-    B::walksymtable(\%::, 'tally_symrefs', sub { 1 });
-    B::walksymtable(\%::, 'queue_subs',    sub { 0 });
+    my (@subrefs)   = @_;
+    my $preamble    = "";
 
-    if ($Verbose) {
-        foreach (sort keys %Taken) {
-            print "Skipping imported sub `$Name{$_}'\n" if $Taken{$_} > 1;
+    if (@subrefs) {
+        @Subs_queue = ();
+
+        foreach (@subrefs) {
+            return "$_ is not a subroutine ref" if ref ne 'CODE';
+            push @Subs_queue, B::svref_2object($_)->ROOT;
+        }
+    } else {
+        B::walksymtable(\%::, 'tally_symrefs', sub { 1 });
+        B::walksymtable(\%::, 'queue_subs',    sub { 0 });
+
+        push @Subs_queue, B::main_root();
+
+        $Sub++;     # The body of the program counts as 1 subroutine.
+
+        if ($Verbose) {
+            foreach (sort keys %Taken) {
+                $preamble .= "Skipping imported sub `$Name{$_}'\n"
+                    if $Taken{$_} > 1;
+            }
         }
     }
 
-    foreach my $op (B::main_root(), @Subs_queue) {
+    foreach my $op (@Subs_queue) {
         # Call the method `tally_op' on each OP in each of the
         # optrees we're looping over:
         B::walkoptree($op, 'tally_op');
     }
 
-    $Sub++;     # The body of the program counts as 1 subroutine.
+    return $preamble . perline() . score_code();
+}
 
-    score_code();
+
+sub score
+{
+    my ($tokens, $exprs, $statements, $subs) = @_;
+
+    my $tok_expr   = $exprs      ? $tokens     / $exprs      : 0;
+    my $expr_state = $statements ? $exprs      / $statements : 0;
+    my $state_sub  = $subs       ? $statements / $subs       : 0;
+
+    return ($tok_expr * .55) + ($expr_state * .28) + ($state_sub * .08);
 }
 
 
 sub score_code
 {
-    my ($tok_expr, $expr_state, $state_sub, $score, $opinion);
+    my $opinion;
+    my $output  = "";
 
-    if ($Tok   == 0) { die "No tokens; score is meaningless.\n" }
-    if ($Expr  == 0) { die "No expressions; score is meaningless.\n" }
-    if ($State == 0) { die "No statements; score is meaningless.\n" }
-    if ($Sub   == 0) { die "No subroutines; score is meaningless.\n" }
+    if ($Tok   == 0) { return "No tokens; score is meaningless.\n" }
+    if ($Expr  == 0) { return "No expressions; score is meaningless.\n" }
+    if ($State == 0) { return "No statements; score is meaningless.\n" }
+    if ($Sub   == 0) { return "No subroutines; score is meaningless.\n" }
 
-    $tok_expr   = $Tok   / $Expr;
-    $expr_state = $Expr  / $State;
-    $state_sub  = $State / $Sub;
-
-    $score = ($tok_expr * .55) + ($expr_state * .28) + ($state_sub * .08);
+    my $score = score($Tok, $Expr, $State, $Sub);
 
     if    ($score < 1) { $opinion = "trivial" }
     elsif ($score < 2) { $opinion = "easy" }
@@ -137,11 +191,41 @@ sub score_code
     elsif ($score < 8) { $opinion = "very difficult" }
     else               { $opinion = "obfuscated" }
 
-    printf "%-5d token%s\n",      $Tok,   ($Tok   == 1 ? "" : "s");
-    printf "%-5d expression%s\n", $Expr,  ($Expr  == 1 ? "" : "s");
-    printf "%-5d statement%s\n",  $State, ($State == 1 ? "" : "s");
-    printf "%-5d subroutine%s\n", $Sub,   ($Sub   == 1 ? "" : "s");
-    printf "readability is %.2f (%s)\n", $score, $opinion;
+    $output .= sprintf "%5d token%s\n",      $Tok,   ($Tok   == 1 ? "" : "s");
+    $output .= sprintf "%5d expression%s\n", $Expr,  ($Expr  == 1 ? "" : "s");
+    $output .= sprintf "%5d statement%s\n",  $State, ($State == 1 ? "" : "s");
+    $output .= sprintf "%5d subroutine%s\n", $Sub,   ($Sub   == 1 ? "" : "s");
+
+    $output .= sprintf "readability is %.2f (%s)\n", $score, $opinion;
+
+    return $output;
+}
+
+
+# This method is called on each OP in the tree we're examining; see
+# do_compile() above.  It examines the OP, and then increments the
+# count of tokens, expressions, statements, and subroutines as
+# appropriate.
+
+my $linenum;
+my (%TokPerLine, %ExprPerLine, %StatePerLine, %SubPerLine);
+
+sub perline {
+    if ($Verbose > 1 and defined $linenum) {
+        my $output  = sprintf
+            "%4d  %2d tokens %2d expressions %2d statements %2d subs %s\n",
+            $linenum, $TokPerLine{$linenum}, $ExprPerLine{$linenum},
+            $StatePerLine{$linenum}, $SubPerLine{$linenum},
+            score($TokPerLine{$linenum}, $ExprPerLine{$linenum},
+                $StatePerLine{$linenum}, $SubPerLine{$linenum})
+        ;
+
+        undef $linenum;
+
+        return $output;
+    }
+
+    return "";
 }
 
 
@@ -151,23 +235,28 @@ sub score_code
 ###
 
 
-# This method is called on each OP in the tree we're examining; see
-# do_compile() above.  It examines the OP, and then increments the
-# count of tokens, expressions, statements, and subroutines as
-# appropriate.
 sub B::OBJECT::tally_op
 {
-    my ($self)      = @_;
-    my $ppaddr      = $self->can('ppaddr') ? $self->ppaddr : undef;
+    my ($self)  = @_;
+    my $ppaddr  = $self->can('ppaddr') ? $self->ppaddr : undef;
+    my $output  = "";
 
-    printf("%-15s %s\n", $ppaddr, ref($self)) if ($Verbose > 1);
+    if ($self->can('line')) {
+       $output  = perline();
+       $linenum = $self->line;
+    }
+
+    $output .= sprintf("%3d %-15s %s\n", $linenum, $ppaddr, ref($self))
+        if $Verbose > 1;
+
+    my ($TokOld, $ExprOld, $StateOld, $SubOld)  = ($Tok, $Expr, $State, $Sub);
 
     if      ($Boring{$ppaddr}) {
         # Do nothing; these OPs don't count
     } elsif ($ppaddr eq 'pp_nextstate' or $ppaddr eq 'pp_dbstate') {
         $Tok += 1;             $State += 1;
     } elsif ($ppaddr eq 'pp_leavesub') {    # sub name { <xxx> }
-        $Tok += 4; $Expr += 1;              $Sub += 1;
+        $Tok += 4; $Expr += 1; $State += 1; $Sub += 1;
     } elsif ($ppaddr =~ /^pp_leave/) {
         # pp_leave* is already accounted for in its matching pp_enter*
     } elsif ($ppaddr eq 'pp_entertry') {    # eval { <xxx> }
@@ -193,6 +282,15 @@ sub B::OBJECT::tally_op
     } else {                                # OP
         $Tok += 1;
     }
+
+    if (defined $linenum) {
+        $TokPerLine{$linenum}   += $Tok   - $TokOld;
+        $ExprPerLine{$linenum}  += $Expr  - $ExprOld;
+        $StatePerLine{$linenum} += $State - $StateOld;
+        $SubPerLine{$linenum}   += $Sub   - $SubOld;
+    }
+
+    return $output;
 }
 
 
@@ -247,6 +345,45 @@ sub full_subname
     } else {
         return undef;
     }
+}
+
+
+sub _parse_args
+{
+    my (@args)  = @_;
+
+    foreach (@args) {
+        if (/-v(.*)/) { $Verbose = length($1) ? $1 : 1 }
+        else          { die "Unknown argument:  `$_'" }
+    }
+
+    return;
+}
+
+
+###
+### OO interface (thanks to Stephen McCamant for the idea, and
+### Doug MacEachern for the encouragement):
+###
+### Please note that, for now, one can only successfully have one
+### B::Fathom object at a time, as compilation arguments are globals.
+
+sub new
+{
+    my ($class, @args)  = @_;
+    my $self            = bless {}, $class;
+
+    _parse_args(@args);
+
+    return $self;
+}
+
+
+sub fathom
+{
+    my ($self, @subrefs)    = @_;
+
+    return do_compile(@subrefs);
 }
 
 

@@ -12,3 +12,10 @@ Revision history for Perl extension B::Fathom.
         - Enhanced -v option to provide more debugging info
         - Treat function calls as listops -- tally () around the arguments
 
+0.04  Wed Aug 18 10:17:17 EDT 1999
+        - More documentation
+        - Added OO interface
+        - A real test in the testsuite
+        - Code cleanup (if this module isn't readable, then we are all doomed)
+        - A subroutine _per se_ now counts as a statement
+

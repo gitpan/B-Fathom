@@ -7,11 +7,11 @@ with Perl 5.005.
 
 I'm eager to improve this module by providing more comprehensive
 readability metrics.  Suggestions, bug reports, and patches are welcome;
-please send all comments to kstar@isinet.com.
+please send all comments to Kurt.Starsinic@isinet.com.
 
 Copyright
 
-    Copyright (c) 1998 Kurt Starsinic.
+    Copyright (c) 1999 Kurt Starsinic.
     This module is free software; you may redistribute it
     and/or modify it under the same terms as Perl itself.
 

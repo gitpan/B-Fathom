@@ -16,7 +16,7 @@ BEGIN
 BEGIN
 {
     $| = 1;
-    print "1..1\n";
+    print "1..2\n";
 }
 
 
@@ -25,12 +25,20 @@ END
     print "not ok 1\n" unless $loaded;
 }
 
+# End of black magic.
+
 
 use B::Fathom;
 $loaded = 1;
 print "ok 1\n";
 
-# End of black magic.
+sub foo { print "bar\n" }
+
+my $fathom  = B::Fathom->new('-v');
+my $score   = $fathom->fathom(\&foo);
+
+if ($score =~ /very readable/) { print "ok 2\n" }
+else                           { print "not ok 2\n" }
 
 # More tests to come.  Any ideas about a clean way to write a test
 # for a compiler module, and to integrate it with a MakeMaker
