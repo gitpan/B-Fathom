@@ -1,10 +1,14 @@
 Revision history for Perl extension B::Fathom.
 
 0.01  Thu Sep 17 20:51:37 EDT 1998
-	- original version; created by h2xs 1.18
+        - Original version; created by h2xs 1.18
 
 0.02  Mon Sep 21 10:30:35 EDT 1998
-	- added SYNOPSIS section
-        - more comments
-        - stopped importing functions from B::
+        - Added SYNOPSIS section
+        - More comments
+        - Stopped importing functions from B::
+
+0.03  Tue Oct 20 22:13:46 EDT 1998
+        - Enhanced -v option to provide more debugging info
+        - Treat function calls as listops -- tally () around the arguments
 

@@ -50,7 +50,7 @@ use strict;
 use B;
 
 use vars qw($VERSION);
-$VERSION = 0.02;
+$VERSION = 0.03;
 
 
 # TODO:
@@ -80,8 +80,8 @@ sub compile
     my (@args)  = @_;
 
     foreach (@args) {
-        if ($_ eq '-v') {
-            $Verbose = 1;
+        if (/-v(.*)/) { # -v or -vn
+            $Verbose += $1 || 1;
         }
     }
 
@@ -160,6 +160,8 @@ sub B::OBJECT::tally_op
     my ($self)      = @_;
     my $ppaddr      = $self->can('ppaddr') ? $self->ppaddr : undef;
 
+    printf("%-15s %s\n", $ppaddr, ref($self)) if ($Verbose > 1);
+
     if      ($Boring{$ppaddr}) {
         # Do nothing; these OPs don't count
     } elsif ($ppaddr eq 'pp_nextstate' or $ppaddr eq 'pp_dbstate') {
@@ -173,6 +175,8 @@ sub B::OBJECT::tally_op
     } elsif ($ppaddr eq 'pp_anoncode') {    # sub { <xxx> }
         $Tok += 3; $Expr += 1;
     } elsif ($ppaddr eq 'pp_scope') {       # do { <xxx> }
+        $Tok += 3; $Expr += 1;
+    } elsif ($ppaddr eq 'pp_entersub') {    # foo()
         $Tok += 3; $Expr += 1;
     } elsif ($self->isa('B::LOOP')) {       # for (<xxx>) { <yyy> }
         $Tok += 5; $Expr += 2;
