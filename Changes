@@ -25,3 +25,7 @@ Revision history for Perl extension B::Fathom.
 0.06  Thu Aug 19 12:14:12 EDT 1999
         - fathom() can now be called repeatedly
 
+0.07  Thu Sep  7 10:14:42 EDT 2000
+        - Fix to support Perl 5.6.0
+        - Changed contact info
+

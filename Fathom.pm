@@ -5,7 +5,7 @@ use strict;
 use B;
 
 use vars qw($VERSION);
-$VERSION = 0.06;
+$VERSION = 0.07;
 
 =head1 NAME
 
@@ -40,6 +40,10 @@ See METHODS below for a more complete explanation of the OO interface.
 C<B::Fathom> is a backend to the Perl compiler; it analyzes the syntax
 of your Perl code, and estimates the readability of your program.
 
+Currently, this module's idea of `readability' is based on methods
+used for analyzing readability of English prose.  Further extensions
+are intended.
+
 =head1 METHODS
 
 There is a simple object-oriented interface to B::Fathom.  It consists of two
@@ -69,11 +73,11 @@ C<Fathom> doesn't work very well on modules yet.
 
 =head1 AUTHOR
 
-Kurt Starsinic E<lt>F<Kurt.Starsinic@isinet.com>E<gt>
+Kurt Starsinic E<lt>F<kstar@cpan.org>E<gt>
 
 =head1 COPYRIGHT
 
-    Copyright (c) 1998, 1999 Kurt Starsinic.
+    Copyright (c) 1998, 1999, 2000 Kurt Starsinic.
     This module is free software; you may redistribute it
     and/or modify it under the same terms as Perl itself.
 
@@ -81,11 +85,11 @@ Kurt Starsinic E<lt>F<Kurt.Starsinic@isinet.com>E<gt>
 
 
 # TODO:
-#   Incorporate Halstead's effort equation and McCabe's cyclomatic metric
-#   Process format statements, prototypes, and package statements
-#   Do a more accurate job when processing modules, rather than scripts
-#   Be smarter about parentheses
-#   Find a `cooler' way to dereference CV's than using symbolic refs
+#   Incorporate Halstead's effort equation and McCabe's cyclomatic metric.
+#   Process format statements, prototypes, and package statements.
+#   Do a more accurate job when processing modules, rather than scripts.
+#   Be smarter about parentheses.
+#   Find a `cooler' way to dereference CV's than using symbolic refs.
 
 
 my (%Taken, %Name, @Skip_sub, @Subs_queue);
@@ -241,7 +245,9 @@ sub B::OBJECT::tally_op
     my $ppaddr  = $self->can('ppaddr') ? $self->ppaddr : undef;
     my $output  = "";
 
-    $ppaddr =~ s/^Perl_//;  # Normalize EMBED and non-EMBED ppaddr's
+    # Normalize EMBED and non-EMBED ppaddr's:
+    $ppaddr =~ s/^Perl_// or                                # Historic
+    $ppaddr =~ s/^PL_ppaddr\[OP_(\w+)\]/'pp_' . lc $1/e;    # 5.6.0+
 
     if ($self->can('line')) {
        $output  = perline();
