@@ -1,27 +1,34 @@
 package B::Fathom;
 
+
 =head1 NAME
 
-B::Fathom - a code comprehension estimator
+B::Fathom - a module to evaluate the readability of Perl code
+
+=head1 SYNOPSIS
+
+    perl -MO=Fathom <script>
+
+or
+
+    perl -MO=Fathom,-v <script>
+
+where E<lt>scriptE<gt> is the name of the Perl program that you
+want to evaluate.
+
+C<-v> activates verbose mode, which currently reports the subs
+that have been skipped over because they seem to be imported.
 
 =head1 DESCRIPTION
 
 C<B::Fathom> is a backend to the Perl compiler; it analyzes the syntax
 of your Perl code, and estimates the readability of your program.
 
-=head1 USAGE
-
-Invoke this module on your code by typing
-
-    perl -MO=Fathom <script>
-
-where <script> is the name of the Perl program that you wish to evaluate.
-
 =head1 CAVEATS
 
-Because of the nature of the compiler, C<Fathom> has to do some guessing
-about the syntax of your program.  See the comments in the module for
-specifics.
+Because of the nature of the compiler, C<Fathom> has to do some
+guessing about the syntax of your program.  See the comments in the
+module for specifics.
 
 C<Fathom> doesn't work very well on modules yet.
 
@@ -37,10 +44,14 @@ Kurt Starsinic E<lt>F<kstar@isinet.com>E<gt>
 
 =cut
 
+
 use strict;
-use B qw(walksymtable walkoptree main_root);
+
+use B;
+
 use vars qw($VERSION);
-$VERSION = 0.01;
+$VERSION = 0.02;
+
 
 # TODO:
 #   Process format statements and prototypes
@@ -80,8 +91,8 @@ sub compile
 
 sub do_compile
 {
-    walksymtable(\%::, 'tally_symrefs', sub { 1 });
-    walksymtable(\%::, 'queue_subs',    sub { 0 });
+    B::walksymtable(\%::, 'tally_symrefs', sub { 1 });
+    B::walksymtable(\%::, 'queue_subs',    sub { 0 });
 
     if ($Verbose) {
         foreach (sort keys %Taken) {
@@ -89,11 +100,13 @@ sub do_compile
         }
     }
 
-    foreach (main_root(), @Subs_queue) {
-        walkoptree($_, 'tally_op');
+    foreach my $op (B::main_root(), @Subs_queue) {
+        # Call the method `tally_op' on each OP in each of the
+        # optrees we're looping over:
+        B::walkoptree($op, 'tally_op');
     }
 
-    $Sub++;     # The body of the program counts as a subroutine.
+    $Sub++;     # The body of the program counts as 1 subroutine.
 
     score_code();
 }
@@ -132,6 +145,16 @@ sub score_code
 }
 
 
+###
+### The next three subs are all in package B::OBJECT; this is so
+### that all OP's will inherit the subs as methods.
+###
+
+
+# This method is called on each OP in the tree we're examining; see
+# do_compile() above.  It examines the OP, and then increments the
+# count of tokens, expressions, statements, and subroutines as
+# appropriate.
 sub B::OBJECT::tally_op
 {
     my ($self)      = @_;
@@ -169,14 +192,17 @@ sub B::OBJECT::tally_op
 }
 
 
-# Keep track of the subroutine associated with each symbol.
-# If we find multiple symbol table entries pointing to one sub, then
-# we'll guess that the sub is imported, and we'll ignore it.
+# Keep track of the sub associated with each symbol.  If we find multiple
+# symbol table entries pointing to one sub, then we'll guess (in
+# do_compile()) that the sub is imported, and we'll ignore it.  Thanks
+# to Mark-Jason Dominus for suggesting this strategy.
 sub B::OBJECT::tally_symrefs
 {
     my ($symbol)    = @_;
     my $name        = full_subname($symbol);
 
+    # We're creating a `symbolic reference' in this block
+    # (see perlref(1)), which is why we need `no strict':
     if ($name) {
         no strict;
         my $coderef = \&{"$name"};
@@ -187,11 +213,15 @@ sub B::OBJECT::tally_symrefs
 }
 
 
+# Create an array of OP's for introspection.  These are the `root' OP's
+# of each sub that we're going to examine.
 sub B::OBJECT::queue_subs
 {
     my ($symbol)    = @_;
     my $name        = full_subname($symbol);
 
+    # We're creating a `symbolic reference' in this block
+    # (see perlref(1)), which is why we need `no strict':
     if ($name) {
         no strict;
         my $coderef = \&{"$name"};
